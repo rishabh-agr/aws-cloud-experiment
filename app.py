@@ -11,6 +11,22 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
+
+import datetime
+from flask import Flask, request
+
+app = Flask(__name__)
+
+@app.before_request
+def log_request():
+    # Simple log to stdout (captured by systemd/gunicorn)
+    print("\n========== ECGenius Request ==========")
+    print("⏱ Time:", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    print("🔗 Method:", request.method)
+    print("📍 Endpoint:", request.path)
+    print("📦 Body:", request.get_data(as_text=True))
+    print("======================================\n")
+
 # ==============================
 # 🔧 PLACEHOLDER FUNCTIONS
 # ==============================
