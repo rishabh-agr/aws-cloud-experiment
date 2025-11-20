@@ -8,14 +8,61 @@ Endpoints:
 """
 
 from flask import Flask, request, jsonify
-
-app = Flask(__name__)
-
-
-import datetime
+import os
+import logging
+from logging.handlers import RotatingFileHandler
 from flask import Flask, request
+import datetime
 
 app = Flask(__name__)
+
+
+# ========= LOGGING SETUP =========
+LOG_FILE = "/home/ubuntu/logs/ecgenius_logs.txt"
+
+# Make sure directory exists
+os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+
+# Create rotating file handler (so log file doesn’t grow forever)
+file_handler = RotatingFileHandler(
+    LOG_FILE,
+    maxBytes=5 * 1024 * 1024,  # 5 MB
+    backupCount=3              # keep 3 old files
+)
+file_handler.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    "%(asctime)s - %(levelname)s - %(message)s"
+)
+file_handler.setFormatter(formatter)
+
+# Also log to console (so you still see logs in SSH)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(formatter)
+
+# Attach handlers to Flask app logger
+app.logger.setLevel(logging.INFO)
+app.logger.addHandler(file_handler)
+app.logger.addHandler(console_handler)
+# ========= END LOGGING SETUP =========
+
+
+# (OPTIONAL) log every incoming request
+@app.before_request
+def log_request():
+    app.logger.info(
+        f"REQUEST: {request.remote_addr} {request.method} {request.path} "
+        f"args={dict(request.args)} json={request.get_json(silent=True)}"
+    )
+
+# ... your existing routes below ...
+# @app.route('/predict', methods=['POST'])
+# def predict():
+#     ...
+#     app.logger.info("Prediction done successfully")
+#     return jsonify(...)
+
+
 
 
 
