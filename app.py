@@ -4,7 +4,7 @@ import os
 import logging
 import random
 from logging.handlers import RotatingFileHandler
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 import boto3
 from botocore.exceptions import ClientError
 
