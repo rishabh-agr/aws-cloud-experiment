@@ -258,7 +258,7 @@ def venticular_fibrillation(samples):
     return False
 
 def heart_rate(samples):
-    return random.uniform(70.0, 75.0)
+    return random.randint(70, 75)
 
 
 
