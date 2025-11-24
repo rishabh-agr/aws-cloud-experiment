@@ -1,6 +1,5 @@
 Flask
 gunicorn
-logging
 random
 datetime
 boto3
