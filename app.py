@@ -544,7 +544,8 @@ def get_report():
         "age": item.get("age"),
         "gender": item.get("gender"),
         "phone_no": item.get("phone_no"),
-        "previous_medication": item.get("previous_medication")
+        "previous_medication": item.get("previous_medication"),
+        "samples": item.get("samples")
     }
 
     return jsonify({"report": report}), 200
