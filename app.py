@@ -233,7 +233,7 @@ def generate_prediction_id() -> str:
     ID format: YYYYMMDD-xxxxxxxx
     Example: 20251125-183012-1a2b3c4d
     """
-    ts = datetime.now(timezone.utc)
+    ts = date.today()
     rand = os.urandom(4).hex()  # 8 hex chars
     return f"{ts}-{rand}"
 
