@@ -35,6 +35,7 @@ int samplesArr[NUM_SAMPLES];      // ~10KB
 bool diagnosing = false;          // prevents re-trigger
 unsigned long lastBlink = 0;
 bool yellowState = true;
+bool awaitAck = false;
 
 // ------------ OLED helper (3 lines of text) -------------
 void oledPrint(const String &l1,
@@ -187,42 +188,68 @@ void handlePrediction(const String &resp) {
     return;
   }
 
+  // ----- NEW FIELD NAMES -----
   JsonObject results = doc["results"];
-  bool af  = results["atrial_fibrillation"]   | false;
-  bool bbb = results["bundle_branch_block"]   | false;
-  bool mi  = results["myocardial_infraction"] | false;
-  bool vf  = results["venticular_fibrillation"] | false;
-  float hr = results["heart_rate"] | 0.0;
 
+  float hr      = results["heart_rate"] | 0.0;
+  bool af       = results["is_afib"] | false;
+  bool bbb      = results["is_bbb"]  | false;
+  bool mi       = results["is_mci"]  | false;
+  bool vf       = results["is_vfi"]  | false;
+
+  const char* ts       = doc["timestamp"];      // e.g. "2025-11-25T04:58:14.768917+00:00"
+  const char* predId   = doc["prediction_id"];  // e.g. "2025-11-25-8e2e5d8a"
+
+  // ----- DETERMINE NORMAL / NOT NORMAL -----
   bool allFalse = !af && !bbb && !mi && !vf;
+  bool isNormal = allFalse;
 
-  if (allFalse) {
+  // ----- BUILD DATE STRING -----
+  String dateLine = "Date: ";
+  if (ts != nullptr) {
+    String tsStr = String(ts);
+    if (tsStr.length() >= 10) {
+      dateLine += tsStr.substring(0, 10);  // "YYYY-MM-DD"
+    } else {
+      dateLine += tsStr;
+    }
+  } else {
+    dateLine += "-";
+  }
+
+  // ----- BUILD 8-DIGIT ID STRING -----
+  String idLine = "ID: ";
+  if (predId != nullptr) {
+    String pidStr = String(predId);
+    int lastDash = pidStr.lastIndexOf('-');
+    if (lastDash >= 0 && (pidStr.length() - lastDash - 1) >= 8) {
+      // take the part after last '-' (8 chars)
+      idLine += pidStr.substring(lastDash + 1);
+    } else {
+      // fallback: show full prediction_id
+      idLine += pidStr;
+    }
+  } else {
+    idLine += "-";
+  }
+
+  // ----- OLED: 3 LINES -----
+  // Line 1: Patient - NORMAL / NOT NORMAL
+  String line1 = isNormal ? "Patient: NORMAL" : "Patient: NOT NORMAL";
+
+  // Show summary on screen (no disease list now)
+  oledPrint(line1, dateLine, idLine);
+
+  // ----- LED / BUZZER LOGIC (same spirit as before) -----
+  if (isNormal) {
     Serial.println("All diseases false -> patient normal");
-    oledPrint(
-      "Checked against 4 disease",
-      "Patient: NORMAL",
-      "HR: " + String(hr, 1) + " bpm"
-    );
-
-    // Green LED ON for 5 seconds
+    // Green LED ON (no auto timeout; stays until next cycle)
     digitalWrite(LED_GREEN, HIGH);
-    delay(5000);
-    digitalWrite(LED_GREEN, LOW);
+    digitalWrite(LED_RED, LOW);
+    digitalWrite(BUZZER_PIN, LOW);
   } else {
     Serial.println("Some disease detected");
-
-    // Build a line listing detected diseases
-    String line1 = "Abnormal ECG";
-    String line2 = "";
-    String line3 = "HR: " + String(hr, 1) + " bpm";
-
-    if (af)  line2 += "AF ";
-    if (bbb) line2 += "BBB ";
-    if (mi)  line2 += "MI ";
-    if (vf)  line2 += "VF ";
-
-    oledPrint(line1, line2, line3);
-
+    // Red LED + buzzer pattern (as before)
     digitalWrite(LED_RED, HIGH);
 
     // buzzer + red for about 7–8 seconds
@@ -235,7 +262,11 @@ void handlePrediction(const String &resp) {
 
     digitalWrite(LED_RED, LOW);
   }
+
+  // After showing result, wait for user to press button to go home
+  awaitAck = true;
 }
+
 
 // ------------ Button logic -------------
 bool buttonPressed() {
@@ -272,8 +303,33 @@ void setup() {
 }
 
 void loop() {
-  // Idle: all LEDs ON if not diagnosing
+  // Idle / other states only when not actively diagnosing
   if (!diagnosing) {
+
+    // ===== NEW: waiting for user to acknowledge result screen =====
+    if (awaitAck) {
+      // Do NOT auto-return to home; wait for button
+      if (buttonPressed()) {
+        // simple debounce
+        delay(50);
+        if (buttonPressed()) {
+          Serial.println("Button pressed: returning to home screen");
+          awaitAck = false;
+
+          // idle state: all LEDs ON to indicate powered
+          digitalWrite(BUZZER_PIN, LOW);
+          digitalWrite(LED_GREEN, HIGH);
+          digitalWrite(LED_RED, HIGH);
+          digitalWrite(LED_YELLOW, HIGH);
+
+          oledPrint("Welcome to ECGenius", "Press button to start");
+        }
+      }
+      return;  // stay in this "ack" state
+    }
+
+    // ===== NORMAL HOME SCREEN BEHAVIOUR (unchanged) =====
+    // Idle: all LEDs ON if not diagnosing and not waiting for ack
     digitalWrite(LED_GREEN, HIGH);
     digitalWrite(LED_RED, HIGH);
     digitalWrite(LED_YELLOW, HIGH);
@@ -303,10 +359,13 @@ void loop() {
         handlePrediction(resp);
 
         diagnosing = false;
-        oledPrint("Welcome to ECGenius", "Press button to start");
+        // IMPORTANT: We no longer go to home here.
+        // The result screen stays until button is pressed (awaitAck == true).
+        // oledPrint("Welcome to ECGenius", "Press button to start");  // removed
       }
     }
   }
 
   // while diagnosing, blinking & buzzer are handled inside recordECG()
 }
+
