@@ -246,7 +246,7 @@ def generate_prediction_id() -> str:
 
 
 def atrial_fibrillation(samples):
-    return False
+    return True
 
 def bundle_branch_block(samples):
     return False
